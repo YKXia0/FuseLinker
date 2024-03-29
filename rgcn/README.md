@@ -1,15 +1,3 @@
-run code
-# 项目名称
+## Run code
 
-该项目包含了一些示例代码，用于演示如何使用特定的编程语言或框架。
-
-## 如何运行代码
-
-### 环境要求
-
-- 编程语言 X （版本 X.X.X）
-- 框架 Y （版本 Y.Y.Y）
-
-### 步骤
-
-1. 克隆该仓库到本地：
+- `!python rgcn.py --data pharmkg8k --num_hidden_layers 2 --iterations 40000`

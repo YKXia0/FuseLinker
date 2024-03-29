@@ -1,3 +1,3 @@
 ## Run code
 
-    !python rgcn.py --data pharmkg8k --num_hidden_layers 2 --iterations 40000 --negative_sample 20
+    !python rgcn.py --data pharmkg8k --num_hidden_layers 2 --iterations 40000 --negative_sample neg_sample_size_eval

@@ -111,6 +111,8 @@ class EmbeddingLayer(nn.Module):
             self.poincare_to_euclidean = nn.Linear(pretrained_domain_embeddings.shape[1], hidden_dim)
             print(f"Loaded pretrained domain embeddings, freeze is {freeze}.")
         else:
+            self.domain_embeddings = nn.Embedding(num_nodes, hidden_dim)
+            self.poincare_to_euclidean = nn.Linear(hidden_dim, hidden_dim)
             print("Initialized random domain embeddings.")
 
         # Pretrained text embeddings, which will be linearly transformed
@@ -118,11 +120,10 @@ class EmbeddingLayer(nn.Module):
             self.text_embedding = nn.Embedding.from_pretrained(torch.from_numpy(pretrained_text_embeddings).float(),
                                                                  freeze=freeze)
             self.autoencoder = TextEmbeddingAutoencoder(pretrained_text_embeddings.shape[1], hidden_dim)
-            # if freeze:
-            #     for param in self.autoencoder.parameters():
-            #         param.requires_grad = False
             print(f"Loaded pretrained text embeddings, freeze is {freeze}.")
         else:
+            self.text_embedding = nn.Embedding(num_nodes, hidden_dim)
+            self.autoencoder = TextEmbeddingAutoencoder(hidden_dim, hidden_dim)
             print("Initialized random text embeddings.")
 
     def forward(self, graph, node_ids, rel_ids, norm):

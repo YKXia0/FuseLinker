@@ -88,6 +88,13 @@ def main(args):
     train_graph, train_rel, train_norm = myutils.build_graph(num_nodes, num_rels, train_data_np)
     train_deg = train_graph.in_degrees(range(train_graph.number_of_nodes())).float().view(-1, 1)
 
+    # build valid grah
+    valid_graph, valid_rel, valid_norm = myutils.build_graph(num_nodes, num_rels, valid_data_np)
+    valid_deg = valid_graph.in_degrees(range(valid_graph.number_of_nodes())).float().view(-1, 1)
+    valid_node_id = torch.arange(0, num_nodes, dtype=torch.long).view(-1, 1)
+    valid_rel = torch.from_numpy(valid_rel)
+    valid_norm = myutils.node_norm_2_edge_norm(valid_graph, torch.from_numpy(valid_norm).view(-1, 1))
+
     # build test graph
     test_graph, test_rel, test_norm = myutils.build_graph(num_nodes, num_rels, test_data_np)
     test_deg = test_graph.in_degrees(range(test_graph.number_of_nodes())).float().view(-1, 1)
@@ -103,6 +110,15 @@ def main(args):
 
     # training loop
     print("Start training...")
+
+    valid_data = torch.LongTensor(valid_data_np)
+    valid_graph = valid_graph.to(device)
+    valid_node_id = valid_node_id.to(device)
+    valid_rel = valid_rel.to(device)
+    valid_norm = valid_norm.to(device)
+    valid_data = valid_data.to(device)
+    total_data = torch.LongTensor(total_data)
+    best_val_mrr = 0.0
 
     # epoch is step
     for iteration in range(1, 1 + args.iterations):
@@ -137,14 +153,38 @@ def main(args):
         optimizer.step()
 
         if iteration % args.evaluate_every == 0:
-            print("Epoch {} | Loss {:.5f}".format(iteration, loss.item()))
+            print("Iteration {} | Loss {:.5f}".format(iteration, loss.item()))
 
         optimizer.zero_grad()
 
-    torch.save({'state_dict': model.state_dict(), 'iteration': iteration}, args.model_state_file)
+        if (iteration % args.validate_every == 0) or (iteration == args.iterations):
+            model.eval()
+            with torch.no_grad():
+                output = model(valid_graph, valid_node_id, valid_rel, valid_norm)
 
-    print("Evaluating...")
+                hits = [1, 3, 10]
+                val_mr, val_mrr, val_hits_dict = myutils.calc_mrr(output, model.relation_weights, valid_data,
+                                                      torch.LongTensor(total_data).to(device),
+                                                      batch_size=args.eval_batch_size,
+                                                      neg_sample_size_eval=args.neg_sample_size_eval,
+                                                      hits=hits, eval_p=args.eval_protocol)
+
+                if val_mrr > best_val_mrr:
+                    best_val_mrr = val_mrr
+                    torch.save({'state_dict': model.state_dict(), 'iteration': iteration}, args.model_state_file)
+                    print("Iteration {} | Best valid MRR {:.5f} | MR {:.5f}| Hits @ {} {:.5f}| Hits @ {} {:.5f}| Hits @ 1 {} {:.5f}| ".format(
+                        iteration, best_val_mrr, val_mr, hits[0], val_hits_dict[hits[0]],
+                        hits[1], val_hits_dict[hits[1]], hits[2], val_hits_dict[hits[2]]))
+
+
+
+    # torch.save({'state_dict': model.state_dict(), 'iteration': iteration}, args.model_state_file)
+
+    print("Testing...")
+    checkpoint = torch.load(args.model_state_file)
+    model.load_state_dict(checkpoint['state_dict'])
     model.eval()
+
     test_data = torch.LongTensor(test_data_np)
     test_graph = test_graph.to(device)
     test_node_id = test_node_id.to(device)
@@ -201,15 +241,14 @@ if __name__ == "__main__":
         default="poincare_embeddings.npy",
         help="Path of domain knowledge embedding for each node",
     )
+    
 
     parser.add_argument(
-        "--freeze",
-        dest="freeze",
-        type=bool,
-        default=False,
-        help="Freeze text embedding and domain knowledge or not",
+        "--freeze", action="store_true",
+        help="Freeze text embedding and domain knowledge or not"
     )
 
+     
     parser.add_argument(
         "--w",
         dest="w",
@@ -278,6 +317,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--evaluate_every",
         dest="evaluate_every",
+        type=int,
+        default=4000,
+    )
+
+    parser.add_argument(
+        "--validate_every",
+        dest="validate_every",
         type=int,
         default=4000,
     )

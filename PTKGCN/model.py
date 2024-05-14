@@ -106,9 +106,13 @@ class EmbeddingLayer(nn.Module):
         self.w = w
         # Pretrained domain embeddings
         if pretrained_domain_embeddings is not None:
-            self.domain_embeddings = nn.Embedding.from_pretrained(torch.from_numpy(pretrained_domain_embeddings).float(),
-                                                          freeze=freeze)
+            domain_embeddings = torch.from_numpy(pretrained_domain_embeddings).float()
+            norm_domain_embeddings = (domain_embeddings - domain_embeddings.min()) / (
+                    domain_embeddings.max() - domain_embeddings.min())
+
             self.poincare_to_euclidean = nn.Linear(pretrained_domain_embeddings.shape[1], hidden_dim)
+            self.norm_domain_embeddings = nn.Embedding.from_pretrained(norm_domain_embeddings, freeze=freeze)
+
             print(f"Loaded pretrained domain embeddings, freeze is {freeze}.")
         else:
             self.domain_embeddings = nn.Embedding(num_nodes, hidden_dim)
@@ -117,9 +121,14 @@ class EmbeddingLayer(nn.Module):
 
         # Pretrained text embeddings, which will be linearly transformed
         if pretrained_text_embeddings is not None:
-            self.text_embedding = nn.Embedding.from_pretrained(torch.from_numpy(pretrained_text_embeddings).float(),
-                                                                 freeze=freeze)
+            text_embeddings = torch.from_numpy(pretrained_text_embeddings).float()
+            norm_text_embeddings = (text_embeddings - text_embeddings.min()) / (
+                    text_embeddings.max() - text_embeddings.min())
+
+            self.norm_text_embeddings = nn.Embedding.from_pretrained(norm_text_embeddings, freeze=freeze)
+
             self.autoencoder = TextEmbeddingAutoencoder(pretrained_text_embeddings.shape[1], hidden_dim)
+
             print(f"Loaded pretrained text embeddings, freeze is {freeze}.")
         else:
             self.text_embedding = nn.Embedding(num_nodes, hidden_dim)
@@ -127,23 +136,15 @@ class EmbeddingLayer(nn.Module):
             print("Initialized random text embeddings.")
 
     def forward(self, graph, node_ids, rel_ids, norm):
-        # Transform the text_embedding to match the GCN embedding's dimensions
-        transformed_text_embeddings, _ = self.autoencoder(self.text_embedding(node_ids.squeeze()))
+        # Transform the text_embeddings to match the GCN embedding's dimensions
+        transformed_text_embeddings, _ = self.autoencoder(self.norm_text_embeddings(node_ids.squeeze()))
 
-        # Get the domain embedding
-        domain_embeddings = self.domain_embeddings(node_ids.squeeze())
         # Map Poincaré embeddings to Euclidean space
-        transformed_domain_embeddings = self.poincare_to_euclidean(domain_embeddings)
-
-        # Normalize embeddings just before the weighted average
-        normalized_domain_embeddings = (transformed_domain_embeddings - transformed_domain_embeddings.min()) / (
-                transformed_domain_embeddings.max() - transformed_domain_embeddings.min())
-        normalized_text_embeddings = (transformed_text_embeddings - transformed_text_embeddings.min()) / (
-                transformed_text_embeddings.max() - transformed_text_embeddings.min())
+        transformed_domain_embeddings = self.poincare_to_euclidean(self.norm_domain_embeddings(node_ids.squeeze()))
 
         # Weighted average of the two normalized embeddings
         # Assuming equal weight for simplicity; adjust as needed
-        combined_embedding = (1 - self.w) * normalized_domain_embeddings + self.w * normalized_text_embeddings
+        combined_embedding = (1 - self.w) * transformed_domain_embeddings + self.w * transformed_domain_embeddings
 
         return combined_embedding
 

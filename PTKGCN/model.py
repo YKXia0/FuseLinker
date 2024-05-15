@@ -115,7 +115,7 @@ class EmbeddingLayer(nn.Module):
 
             print(f"Loaded pretrained domain embeddings, freeze is {freeze}.")
         else:
-            self.domain_embeddings = nn.Embedding(num_nodes, hidden_dim)
+            self.norm_domain_embeddings = nn.Embedding(num_nodes, hidden_dim)
             self.poincare_to_euclidean = nn.Linear(hidden_dim, hidden_dim)
             print("Initialized random domain embeddings.")
 
@@ -131,7 +131,7 @@ class EmbeddingLayer(nn.Module):
 
             print(f"Loaded pretrained text embeddings, freeze is {freeze}.")
         else:
-            self.text_embedding = nn.Embedding(num_nodes, hidden_dim)
+            self.norm_text_embeddings = nn.Embedding(num_nodes, hidden_dim)
             self.autoencoder = TextEmbeddingAutoencoder(hidden_dim, hidden_dim)
             print("Initialized random text embeddings.")
 
